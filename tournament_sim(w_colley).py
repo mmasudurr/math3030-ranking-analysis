@@ -8,68 +8,61 @@ Original file is located at
 """
 
 import numpy as np
-import pandas as pd # Library to display nice tables
+import pandas as pd
+import matplotlib.pyplot as plt
 
 # --- 1. SETUP ---
 np.random.seed(42)
 n_bots = 10
 bot_names = [f"Bot_{i}" for i in range(n_bots)]
-# True skills (Hidden)
+# True skills (10-90)
 true_skills = np.sort(np.random.randint(10, 90, n_bots))
 
 # DATA STORAGE
-# We need to store every single game result to build the Matrix later
-# Format: (Player_A_Index, Player_B_Index, Winner_Index)
 game_history = []
 
-# --- 2. RUN TOURNAMENT (Round Robin) ---
-# Everyone plays everyone twice (once home, once away) to get more data
-print("--- Simulating Tournament (Double Round-Robin) ---")
-for i in range(n_bots):
-    for j in range(n_bots):
-        if i == j: continue # Can't play yourself
+# --- 2. RUN TOURNAMENT (More Games!) ---
+# We will run 10 Rounds (everyone plays everyone 10 times) to reduce noise
+print(f"--- Simulating Tournament (10 Rounds) ---")
 
-        # Who wins?
-        diff = true_skills[i] - true_skills[j]
-        prob_a = 1 / (1 + 10**(-diff / 400))
-        if np.random.rand() < prob_a:
-            winner = i
-        else:
-            winner = j
+for round in range(10):
+    for i in range(n_bots):
+        for j in range(n_bots):
+            if i == j: continue
 
-        game_history.append((i, j, winner))
+            # --- THE FIX IS HERE ---
+            diff = true_skills[i] - true_skills[j]
+            # Changed divisor from 400 to 40 to make skill matter more!
+            prob_a = 1 / (1 + 10**(-diff / 40.0))
 
-# --- 3. METHOD A: ELO RATING (Iterative) ---
+            if np.random.rand() < prob_a:
+                winner = i
+            else:
+                winner = j
+
+            game_history.append((i, j, winner))
+
+# --- 3. METHOD A: ELO RATING ---
 elo_ratings = np.ones(n_bots) * 1200
 K = 32
 
 for p1, p2, winner in game_history:
-    # 1 if P1 won, 0 if P2 won
     actual_score = 1 if winner == p1 else 0
 
-    # Calculate expected score
+    # We keep 400 here because ELO output should still look like standard ELO (1200 range)
+    # But the INPUT game data is now cleaner.
     expected_p1 = 1 / (1 + 10**((elo_ratings[p2] - elo_ratings[p1]) / 400))
 
-    # Update
     elo_ratings[p1] += K * (actual_score - expected_p1)
     elo_ratings[p2] += K * ((1 - actual_score) - (1 - expected_p1))
 
-# --- 4. METHOD B: COLLEY MATRIX (Linear Algebra) ---
-# We solve Ar = b
-# A is the Colley Matrix (n x n)
-# b is the vector of (1 + (wins - losses)/2)
-
+# --- 4. METHOD B: COLLEY MATRIX ---
 colley_matrix = np.zeros((n_bots, n_bots))
 b_vector = np.zeros(n_bots)
-
-# Step 1: Fill the Matrix and Vector
-# Diagonal of A = 2 + total_games_played
-# Off-diagonal A_ij = -1 * games_between_i_and_j
 wins = np.zeros(n_bots)
 losses = np.zeros(n_bots)
 
 for p1, p2, winner in game_history:
-    # Update wins/losses
     if winner == p1:
         wins[p1] += 1
         losses[p2] += 1
@@ -77,22 +70,17 @@ for p1, p2, winner in game_history:
         wins[p2] += 1
         losses[p1] += 1
 
-    # Update Matrix (Off-diagonal)
     colley_matrix[p1, p2] -= 1
 
-# Fill Diagonal and b_vector
 for i in range(n_bots):
     total_games = wins[i] + losses[i]
     colley_matrix[i, i] = 2 + total_games
     b_vector[i] = 1 + (wins[i] - losses[i]) / 2
 
-# Step 2: SOLVE THE SYSTEM (Linear Algebra Magic)
-# r = A_inverse * b
 colley_ratings = np.linalg.solve(colley_matrix, b_vector)
 
 # --- 5. COMPARE RESULTS ---
 print("\n--- FINAL COMPARISON ---")
-# Create a DataFrame to show side-by-side
 df = pd.DataFrame({
     'Bot': bot_names,
     'True_Skill': true_skills,
@@ -100,14 +88,14 @@ df = pd.DataFrame({
     'Colley_Score': np.round(colley_ratings, 3)
 })
 
-# Sort by True Skill to see if the rankings match
+# Sort by True Skill
 df = df.sort_values(by='True_Skill', ascending=False)
 print(df.to_string(index=False))
 
-# Calculate Accuracy (Correlation)
+# Calculate Accuracy
 elo_corr = df['True_Skill'].corr(df['Elo_Rating'])
 colley_corr = df['True_Skill'].corr(df['Colley_Score'])
 
-print(f"\nCorrelation with True Skill (1.0 is perfect):")
+print(f"\nCorrelation with True Skill (Target > 0.9):")
 print(f"Elo Method:    {elo_corr:.4f}")
 print(f"Colley Method: {colley_corr:.4f}")
