@@ -99,3 +99,36 @@ colley_corr = df['True_Skill'].corr(df['Colley_Score'])
 print(f"\nCorrelation with True Skill (Target > 0.9):")
 print(f"Elo Method:    {elo_corr:.4f}")
 print(f"Colley Method: {colley_corr:.4f}")
+
+
+# --- 6. GENERATE COLLEY VISUALIZATION ---
+print("\nGenerating Colley analysis graph...")
+
+plt.figure(figsize=(10, 6))
+
+# 1. Plot the Bots as dots
+# X-axis = True Skill, Y-axis = Colley Score
+plt.scatter(df['True_Skill'], df['Colley_Score'], color='blue', s=100, label='Bots')
+
+# 2. Draw a red "Trend Line" to show the correlation
+# This calculates the "Line of Best Fit"
+z = np.polyfit(df['True_Skill'], df['Colley_Score'], 1)
+p = np.poly1d(z)
+plt.plot(df['True_Skill'], p(df['True_Skill']), "r--", linewidth=2, label=f'Trend Line (Corr: {colley_corr:.3f})')
+
+# 3. Labeling the specific bots
+for i in range(len(df)):
+    plt.text(df.iloc[i]['True_Skill'] + 1, df.iloc[i]['Colley_Score'],
+             df.iloc[i]['Bot'], fontsize=9)
+
+plt.title("Method B: Colley Matrix Accuracy Analysis")
+plt.xlabel("True Hidden Skill (0-100)")
+plt.ylabel("Calculated Colley Rating")
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.6)
+
+plt.tight_layout()
+plt.savefig("colley_analysis.png")
+print("Graph saved as 'colley_analysis.png'")
+plt.show()
+
